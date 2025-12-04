@@ -45,5 +45,6 @@ For part 2, it also created a working solution first time.
 
 Cost: €0.48  
 
+- 1.24
 
 
