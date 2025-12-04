@@ -45,6 +45,16 @@ For part 2, it also created a working solution first time.
 
 Cost: €0.48  
 
-- 1.24
+### Day 4  
+For both parts, it created a working solution first time.  
+For part 2, it decided to run part1 -> remove accessible rolls -> repeat until no more accessible rolls.  
+
+Cost: €0.47  
+
+For my solution, I used:  
+- A [Summed Area Table](https://en.wikipedia.org/wiki/Summed-area_table) to compute neighbourhoods. I've used this to implement fast box blurring in the past. It's overkill for this, but would scale better with neighbourhood size.  
+- A breadth-first search for removing rolls. This results in less wasted computation as it only re-checks areas around removed rolls. This would win out when the grid is sparse or there are big chains of knock-on effects when removing rolls.  
+
+
 
 
