@@ -26,11 +26,11 @@ Put the solution in [@part2_ai.rs](file:///home/adam/projects/rust/aoc2025/day1/
 You can test the program by running `cat data/input.txt | cargo run --bin part2_ai`
 ````
 
-### Day 1:  
+### Day 1  
 Using Claude Sonnet 4.5 via [OpenRouter](https://openrouter.ai/), both parts were solved in one go with the provided prompts.  
 Total cost: €1.08  
 
-### Day 2:  
+### Day 2  
 I had to extend the prompt to tell the agent not to explore the repo, as it found my code and decided to copy paste the solution instead of doing it itself.  
 ```
 Do not explore the codebase before attempting to create your solution.  
@@ -38,5 +38,12 @@ Do not explore the codebase before attempting to create your solution.
 
 After that, it was able to solve both parts with one try.  
 Cost: €0.76  
+
+### Day 3
+For part 1, it created a working solution the first time. However it used a brute force approach, trying every combination of possible batteries and finding the best.  
+For part 2, it also created a working solution first time.  
+
+Cost: €0.48  
+
 
 
