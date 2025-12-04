@@ -37,4 +37,6 @@ Do not explore the codebase before attempting to create your solution.
 ```
 
 After that, it was able to solve both parts with one try.  
+Cost: €0.76  
+
 
