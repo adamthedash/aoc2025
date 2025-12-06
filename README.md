@@ -68,6 +68,16 @@ For part 1, it almost created a working solution, but ran into an overflow issue
 Part 2 it was able to get in one shot, taking the same approach as I did - Merging overlapping ranges before counting.  
 Cost: €0.54  
 
+### Day 6  
+Despite my previous "Don't explore the codebase" prompt, the agent decided to overwrite the input data file with its own data, removing trailing whitespace on each line. The solution it created for both parts worked either way.  
+
+A new piece of rust syntax it used: `.map(|line| format!("{:<width$}", line, width = width))` - Good for deciding pad width at runtime.  
+Our approaches taken to find problem ranges differed:  
+- I found the positions of each operator, which is always left-justified.  
+- The AI checked for colummns containing only " " as separators.  
+
+Cost: €0.77  
+
 
 ---
 Here is the latest prompt I'm using for the AI:  
