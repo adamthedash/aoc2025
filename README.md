@@ -78,6 +78,83 @@ Our approaches taken to find problem ranges differed:
 
 Cost: €0.77  
 
+### Day 7  
+This was the first time I've seen the AI spin its wheels a bit before creating a correct solution.  
+
+#### Part 1
+It started off with a breadth-first search algorithm, beginning at the beam starting point, then propogating downward until a split point.  
+Its first solution missed the case where a beam splits onto the path of a beam above it, leading to both beams being propogated down to the next splitter.  
+The AI incorrectly identified that it was erroneously counting the starting beam position and tried to fix it, which didn't work.  
+It next identified that the issue comes from when two beams split onto the same position, which is closer but still isn't right.  
+It then caught itself before running the example, and decided to only count unique hits on splitters. This did result in a correct answer, but it didn't actually identify what was causing the issue in the first place.  
+
+As an aside (not included in total cost), I asked it to explain why the first solution was incorrect and give me a minimal solution demonstrating it. It gave me:  
+```
+In my first attempt, I was counting a split **every time a beam hit a splitter**, even if multiple beams hit the same splitter. The correct answer requires counting **each unique splitter that gets hit**, not the total number of beam-splitter collisions.
+
+.S.S.
+.....
+.^.^.
+.....
+..^..
+.....
+```
+Its first attempt actually solved this minimal example correctly. In its BFS implementation, it keeps track of visited positions as the starting point of each beam (including the starting point after a split), so that it doesn't propogate two new beams from the same starting point.  
+I asked it to highlight why specifically this visited tracking strategy doesn't work. It started confidently working though an example, only to realise that it did work.  
+It then changed its mind, and correctly stated the actual issue, but gave a wrong example:  
+```
+The real issue must be that in the actual long input, we can have beams starting from the **same column** but **different rows**. Since `visited` tracks (row, col) pairs, two beams can pass through the same splitter if they start from different rows in the same column!  
+
+..S..
+.....
+..^..   <- (2,2) splits=1, creates (2,1) and (2,3)
+.....
+.^.^.   <- (4,1) splits=2, creates (4,0) and (4,2)
+.....   <- (4,3) splits=3, creates (4,2) [visited!] and (4,4)
+.........   <- beam from (4,2) travels down
+.....^...   <- (8,5) from some other path...
+.........
+..^..   <- (10,2) gets hit by the beam from (4,2)
+..^..   <- (11,2) ALSO gets hit by the same beam!
+```
+Here it thinks that a beam can pass directly through a splitter and hit one below it. It immediately caught itself, realised it's probably going down a wrong path, then asked to see the input data.  
+
+It continued in circles for some time, correctly stating the issue but creating an example which doesn't demonstrate it.  
+Eventually I decided to manually create the example and ask it to walk me through it.  
+```
+..S..
+.....
+..^..
+.....
+.^...
+.....
+..^..
+.....
+...^.
+.....
+```
+Which it was able to do:  
+```
+- Splitter at (2, 2): counted once ✓
+- Splitter at (4, 1): counted once ✓
+- Splitter at (8, 3): counted **TWICE** ❌ (once from beam at (2,3), once from beam at (6,3))
+- Splitter at (6, 2): counted once ✓
+```
+
+Cost for this investigation: €0.88  
+
+#### Part 2
+For part 2, it went for a recursive solution. Starting at the beginning, it followed the beam down until it hit a splitter. Then it branched off into two paths, running the same thing starting from both split points.  
+It produced the correct solution for the example data, however with the real data, the runtime would be infeasible, so I stopped it after 60s.  
+It then correctly identified that the issue was excessive recursion, and implemented a memoisation strategy so that sub-branches were only calculated once. This produced the correct answer in short time.  
+
+My approach to this problem was quite different. The AI held the 2d grid in memory, indexing into it during a search. I iterated over the rows, updating a running state of the beams over time.  
+This would scale better memory-wise with more rows and should have better cache locality, but would lose out computationally to a search based approach where the grid/beams are sparser.  
+For part 2, instead of a recurive solution, I propogated down a count of "how many ways are there to reach this location".  
+Even for a relatively short number of rows, the recursive solution would likely run into issues with stack depth. Tail-call optimisation can't help here as there are two recursive paths at each splitting point.  
+
+Total cost: €1.07  
+
 
 ---
 Here is the latest prompt I'm using for the AI:  
