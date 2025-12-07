@@ -73,7 +73,7 @@ Despite my previous "Don't explore the codebase" prompt, the agent decided to ov
 
 A new piece of rust syntax it used: `.map(|line| format!("{:<width$}", line, width = width))` - Good for deciding pad width at runtime.  
 Our approaches taken to find problem ranges differed:  
-- I found the positions of each operator, which is always left-justified.  
+- I found the positions of each operator, which are always left-justified.  
 - The AI checked for colummns containing only " " as separators.  
 
 Cost: €0.77  
