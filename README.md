@@ -155,6 +155,17 @@ Even for a relatively short number of rows, the recursive solution would likely 
 
 Total cost: €1.07  
 
+### Day 8  
+For this problem, I went way overkill. I implemented a [KDTree](https://en.wikipedia.org/wiki/K-d_tree) which allows fast nearest neighbour search. I spent long time extending this to a sorted nearest neighbour search, which allowed me to iterate over neighbours in increasing distance from a target point. I found [this cool trick](https://stackoverflow.com/a/49456073) for lazily-initalised iterators, which allowed me to construct an efficient lazy tree walk while maintaining a nice `Iterator` interface.  
+There's a lot of closure nonsense in my implemenetation, so I'm not sure how much overhead the compiler is able to get rid of.  
+
+
+For part 1, the AI went for a [union-find](https://en.wikipedia.org/wiki/Disjoint-set_data_structure) approach. I hadn't come across this before, but it's for handling a collection of non-overlapping disjoint sets (circuits). In my implementation I was merging sets manually.  
+Notably it also just calculated the pairwise distances exhaustively, which even for the real input data (N=1000) was very fast.  
+It struggled a bit with using 10 connections for the example and 1000 for the real data, but after that it came to the right answer.  
+
+Total cost: €1.12  
+
 
 ---
 Here is the latest prompt I'm using for the AI:  
