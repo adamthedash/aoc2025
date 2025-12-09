@@ -166,6 +166,43 @@ It struggled a bit with using 10 connections for the example and 1000 for the re
 
 Total cost: €1.12  
 
+### Day 9  
+For this problem, I spent some time thinking about different solutions, but in the end I couldn't come with much better than exhaustively checking every possible combination. This problem probably falls into some well-known category which I'm not aware of.  
+
+The AI went straight for a brute force approach for part 1, which it got correct. For part 2, it tried to enumerate every possible green/red tile location, which was prohibitively expensive so I had to kill it after 60s.  
+After taking a look at the input data, it recognised that the coordinates were too large to materialise all possible locations up front, so it switched to checking for valid files on the fly. Before running on the real data, it guessed that it would likely still run for way too long, and proposed some potential optimisations. At this point it also started compiling in release mode.  
+It then re-introduced the problem by caching checks for "valid" tiles (green/red), meaning we're back to materialising all tiles.  
+It then tried to get around the problem by discarding rectangles which were too large. This obviously resulted in an incorrect answer. It upped its limit for rectangle size several times.  
+At this point I suggested that it calculate the actual biggest rectangle, rather than brute forcing with different limits. It still kept going in circles, so I had to explicitly tell it to scrap its current approach.  
+At this point I noticed that the cost was starting to ramp up quickly. I was up over €3 just for this question and running low on credits on OpenRouter.  
+At this point it seemed that either Zed's Agent or Claude Sonnet 4.5 was having issues with context. In its thinking text, there were sections like this:  
+```
+ I cannot complete the thought because the next thinking appears to be incomplete or truncated. There are no substantive details to help me finish or rewrite the current partial thinking. I apologize, but the provided context appears to be incomplete or fragmented. 
+```
+I decided that I'd stop the thread here, creating a new one with Zed's "New Thread from Summary" feature.  
+Here is the prompt I gave it at this point:  
+````
+Solve the following Advent of Code challenge. 
+```
+<Part 1 text>  
+<Part 2 text>
+```
+You have already solved part 1. Your solution is available in [@part1_ai.rs](parth/to/part1_ai.rs)  
+Solve part 2 of the challenge.  
+
+Do not explore the codebase (except viewing your part 1 solution) before attempting to create your solution.  
+Put the solution in [@part1_ai.rs](file:///home/adam/projects/rust/aoc2025/day1/src/bin/part1_ai.rs)   
+The input data has already been prepared.  
+You can test the program by running:  
+- `cat data/example.txt | cargo run --bin part2_ai` (example input shown above)  
+- `cat data/input.txt | cargo run --bin part2_ai` (real input)  
+````
+
+For its 2nd attempt, it came up with a better approach. Instead of checking if all points inside each box were on a red/green tile, it checked if the rectangle geometry was inside the polygon geometry.  
+However instead of using an exact solution, it decided to sample points along the bounding box perimeter, and check that all of them were inside the polygon.  
+It first used a relatively low sample size, resulting in a much too big answer. With an increasd size it got the correct answer. However because it changed, it second guessed itself and decided to use a "more precise" geometric check. As it turns out, this check was simply to add more sample points inside the bounding box.  
+
+Total cost: €4.49  
 
 ---
 Here is the latest prompt I'm using for the AI:  
