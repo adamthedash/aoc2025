@@ -237,6 +237,13 @@ At this point I had to call it quits, the agent failed to solve part 2.
 
 Total cost: €9.54  
 
+### Day 11
+Today was a fun puzzle, a graph traversal problem. Instead of going with a search algorithm, I decided to use [this cool property](https://en.wikipedia.org/wiki/Adjacency_matrix#Matrix_powers) of the adjacency matrix. Raising the matrix to the power N gives you the paths of length N between all points on the graph.  
+Initially I created a dense matrix, but due to the O(N^3) complexity of a matrix multiplication, I had to use sparse data instead. This also had the added bonus of reduced complexity when computing paths between individual points, in this case only 6 of the 500^2-ish pairs of possible points.  
+
+
+
+
 
 ---
 Here is the latest prompt I'm using for the AI:  
