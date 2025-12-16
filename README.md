@@ -210,6 +210,32 @@ Part 1 of today was easy enough. Since buttons toggle the lights, each needs to 
 Part 2 I first tried to use some heuristics to solve for the correct distribution of presses, but I kept running into cases where it failed. Eventually I took a step back and went down the [Constraint optimisation](https://en.wikipedia.org/wiki/Constraint_programming) route.  
 Given a rough initial set of constraints, I refined them using [Gaussian elimination](https://en.wikipedia.org/wiki/Gaussian_elimination) which gave me a simpler set which could be enumerated using a [Backtracking](https://en.wikipedia.org/wiki/Backtracking) algorithm. I had to fiddle around with the ordering in which constraints were checked and variables enumerated to reduce the search space down to a feasible size.  
 
+The AI went for a similar solution to me for part 1. It did note this problem was equivalent to a "linear algebra problem over GF(2)".  
+For part 2, the AI initially tried using Dijkstra's to find the minimum cost path to the target state. This timed out, presumably because the search space is too large due to roughly evenly-weighted buttons.  
+As its 2nd attempt, it tried to go for a linear programming approach: "finding the minimum L1 norm solution to a system of linear equations". Here it ran into integer overflow issues and failed to fix them for a few tried. It managed to get a running program but this also timed out.  
+For its 3rd attempt, it went for "A mathematical solution using gaussian elimination or a greedy heuristic". It definitely didn't implement GE, but from what I can tell it's a breadth-first search based solution. Again this timed out.  
+At this point it took a look at the data, and decided on a "greedy approach with backtracking". The approach was similar again. And again it timed out. It went around a bit more in circles trying slightly different variations of the same thing, but each time with "more optimial" solutions.  
+Similar to yesterday, I decided to start a new thread with a summary and see if it could get itself out of the ditch. I used the same prompt as above.  
+
+Immediately, it went back to trying the same thing again, so I'm not entirely sure Zed's summary feature is working.  
+One weird thing is that it mentioned using gaussian elimination multiple times, but never actually implements it and instead goes back to using greedy approaches. I decided to wipe the chat history and be explicit about using GE.  
+
+```
+Treat this problem as solving a system of linear equations. Use gaussian elimination to first simplify the constraints. Then use whatever method you would like to enumerate the solution space to find the best solution. Several cases in the input space have large search spaces, so brute force algorithms will not work. Use one which will help you narrow down the search space without fully exploring it.  
+```
+
+I also added an explicit timeout to the testing commands so I wouldn't need to manually kill it.  
+
+```
+- `cat data/example.txt | timeout 60 cargo run --bin part1_ai` (example input shown above)  
+- `cat data/input.txt | timeout 60 cargo run --bin part1_ai` (real input)  
+```
+
+
+This time, it actually tried to use a GE approach. However, on getting the wrong answer, it immediately scrapped it and went back to a search based solution. Even with me trying to steer it on track to fix its GE implementation, it kept going in circles.  
+At this point I had to call it quits, the agent failed to solve part 2.  
+
+Total cost: €9.54  
 
 
 ---
@@ -221,9 +247,10 @@ Solve the following Advent of Code challenge.
 ```  
 Do not explore the codebase before attempting to create your solution.  
 Put the solution in [@part1_ai.rs](file:///home/adam/projects/rust/aoc2025/day1/src/bin/part1_ai.rs)   
+The input data files have already been prepared.  
 You can test the program by running:  
-- `cat data/example.txt | cargo run --bin part1_ai` (example input shown above)  
-- `cat data/input.txt | cargo run --bin part1_ai` (real input)  
+- `cat data/example.txt | timeout 60 cargo run --bin part1_ai` (example input shown above)  
+- `cat data/input.txt | timeout 60 cargo run --bin part1_ai` (real input)  
 ````  
 
 And for part 2 (in the same thread):  
@@ -236,8 +263,9 @@ Now solve part 2:
 ```  
 Do not explore the codebase before attempting to create your solution.  
 Put the solution in [@part2_ai.rs](file:///home/adam/projects/rust/aoc2025/day1/src/bin/part2_ai.rs)   
+The input data files have already been prepared.  
 You can test the program by running:  
-- `cat data/example.txt | cargo run --bin part2_ai` (example input shown above)  
-- `cat data/input.txt | cargo run --bin part2_ai` (real input)  
+- `cat data/example.txt | timeout 60 cargo run --bin part2_ai` (example input shown above)  
+- `cat data/input.txt | timeout 60 cargo run --bin part2_ai` (real input)  
 ````
 
