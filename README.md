@@ -204,6 +204,14 @@ It first used a relatively low sample size, resulting in a much too big answer. 
 
 Total cost: €4.49  
 
+
+### Day 10
+Part 1 of today was easy enough. Since buttons toggle the lights, each needs to be pressed 0 or 1 times. I chose to store the button patterns as integers and use some bitwise operations to enumerate all possible combinations.  
+Part 2 I first tried to use some heuristics to solve for the correct distribution of presses, but I kept running into cases where it failed. Eventually I took a step back and went down the [Constraint optimisation](https://en.wikipedia.org/wiki/Constraint_programming) route.  
+Given a rough initial set of constraints, I refined them using [Gaussian elimination](https://en.wikipedia.org/wiki/Gaussian_elimination) which gave me a simpler set which could be enumerated using a [Backtracking](https://en.wikipedia.org/wiki/Backtracking) algorithm. I had to fiddle around with the ordering in which constraints were checked and variables enumerated to reduce the search space down to a feasible size.  
+
+
+
 ---
 Here is the latest prompt I'm using for the AI:  
 ````
