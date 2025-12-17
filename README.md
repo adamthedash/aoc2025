@@ -241,7 +241,13 @@ Total cost: €9.54
 Today was a fun puzzle, a graph traversal problem. Instead of going with a search algorithm, I decided to use [this cool property](https://en.wikipedia.org/wiki/Adjacency_matrix#Matrix_powers) of the adjacency matrix. Raising the matrix to the power N gives you the paths of length N between all points on the graph.  
 Initially I created a dense matrix, but due to the O(N^3) complexity of a matrix multiplication, I had to use sparse data instead. This also had the added bonus of reduced complexity when computing paths between individual points, in this case only 6 of the 500^2-ish pairs of possible points.  
 
+The AI went for a simple DFS algorithm for part 1. 
+For part 2, it initially tried its part 1 solution, but with checks to see which paths pass through the correct nodes. This timed out.  
+It then tried to add some memoisation for visited paths, but this didn't help much as the graph is quite large. This also timed out.  
+It stated several times that maybe it needs to use dynamic programming, then went back and tried DFS with memoisation again.  
+Eventually it did succeed with this approach after assuming that the graph is a DAG, and was able to get rid of cycle tracking which was evidently taking most of the time.  
 
+Total cost: €2.13  
 
 
 
@@ -275,4 +281,11 @@ You can test the program by running:
 - `cat data/example.txt | timeout 60 cargo run --bin part2_ai` (example input shown above)  
 - `cat data/input.txt | timeout 60 cargo run --bin part2_ai` (real input)  
 ````
+
+# Some takeaways
+- When faced with an error/timeout, the AI often suggested a solution, but then implement something else entirely, often the "easy" path instead of trying to properly solve the problem.  
+- The AI almost never looked at the input data, or added debug prints in order to get more information about why an attempt was not working.  
+- Within one "thinking cycle" (between attempting to run the program), the AI often caught itself multiple times in short succession. "Wait, I see the issue now", "Actually, I can do XYZ", "Wait, let me reconsider", etc. I'm not sure if this is an artefact of the model I'm using, how context is fed to the model, or something else. When it went down a wrong path (like day 10), it seemed to get stuck in this cycle of second guessing itself, and settling on not changing a whole lot rather than try more different approaches which it identified earlier in the context.  
+- Code generated was rarely ever commented. It tended to dump everything into one big function unless some recursion was needed. It didn't really use a whole lot of Rust's niceties, opting for an imperitive style for most things.  
+
 
