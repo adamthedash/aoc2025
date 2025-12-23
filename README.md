@@ -249,6 +249,16 @@ Eventually it did succeed with this approach after assuming that the graph is a 
 
 Total cost: €2.13  
 
+### Day 12
+This one took me a long time to figure out. At first I tried some heuristic / search based approaches. However these quickly became infeasible with the real data, as the branching factor and search depth is huge.  
+Eventually I did some research on the problem, which is formally called a [Polyomino Tiling Problem](https://en.wikipedia.org/wiki/Polyomino#Tiling_with_polyominoes). This is an NP-complete problem, however there are ways to make it tractible in finite time.  
+The problem can be re-phrased as an [Exact Cover](https://en.wikipedia.org/wiki/Exact_cover) problem, whereby a number of constraints are satisfied by a combination of choices.  
+In this case, the constraints are that the exact number of each piece are used, and that each square in the region is covered at most 1 time. The choices are an enumeration of every possible piece in every orientation and position on the board.  
+In one case, the results in a matrix of ~1500 x ~1.1m, but is extremely sparse (<10m cells filled). The matrix is efficiently represented using [Dancing Links](https://en.wikipedia.org/wiki/Dancing_links), a bidirectional graph between adjacent 1's. This allows fast traversal and removing/re-adding nodes, which is used by [Algorithm X](https://en.wikipedia.org/wiki/Knuth%27s_Algorithm_X) to solve the exact cover problem.  
+The implementation of the algorithm was fairly straight forward once I understood it, but the big hurdle was understanding how to represent the problems as an abstract exact cover question.  
+Even with this effecient algorithm, in the case where there is no solution I found that the run time became too large. Adding an initial check whether the area of the region was enough to hold all the presents was enough to get it over the line.  
+
+
 
 
 ---
