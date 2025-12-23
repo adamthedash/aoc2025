@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{Display, Write},
     iter::successors,
 };
@@ -12,6 +13,8 @@ type NodeIndex = usize;
 struct Node {
     /// Position of this 1 in the matrix
     pos: (usize, usize),
+    /// How many instances of this node are left
+    remaining: usize,
     /// Pointers to adjacent nodes
     left: NodeIndex,
     right: NodeIndex,
@@ -28,6 +31,7 @@ struct DancingLinks {
     headers: Vec<NodeIndex>,
     /// Masks of rows/columns which have been covered
     covered_columns: Vec<bool>,
+    covered_rows: Vec<bool>,
     /// Count of nodes in each column
     nodes_per_column: Vec<usize>,
     /// Number of possible choices that can be made
@@ -42,6 +46,7 @@ impl DancingLinks {
         let head = Node {
             // Header doesn't lie in the table
             pos: (usize::MAX, usize::MAX),
+            remaining: 1,
             // First node always points to itself
             left: 0,
             right: 0,
@@ -54,6 +59,7 @@ impl DancingLinks {
             head: 0,
             headers: vec![],
             covered_columns: vec![],
+            covered_rows: vec![],
             nodes_per_column: vec![],
             num_rows: 0,
             primary_columns: vec![],
@@ -67,6 +73,8 @@ impl DancingLinks {
         let node = Node {
             // Not a real position here
             pos: (usize::MAX, self.headers.len()),
+            // Headers only have 1 instance, as they are not decremented
+            remaining: 1,
             // New column placed after last / before start node
             left: tail,
             right: self.head,
@@ -88,9 +96,9 @@ impl DancingLinks {
     }
 
     /// Add a new row (choice) to the matrix using sparse column indices
-    fn add_row(&mut self, columns: &[usize]) {
+    fn add_row(&mut self, columns: &HashMap<usize, usize>) {
         // Expand columns if we need to
-        let max_column = *columns.iter().max().unwrap();
+        let max_column = *columns.keys().max().unwrap();
         for _ in self.headers.len()..=max_column {
             self.add_column();
         }
@@ -99,7 +107,7 @@ impl DancingLinks {
         let row_indices =
             (self.nodes.len()..(self.nodes.len() + columns.len())).collect::<Vec<_>>();
 
-        for ((i, &col), &index) in columns.iter().enumerate().zip(&row_indices) {
+        for ((i, (&col, &count)), &index) in columns.iter().enumerate().zip(&row_indices) {
             let head = self.headers[col];
             let tail = self.nodes[head].up;
 
@@ -110,6 +118,7 @@ impl DancingLinks {
 
             let node = Node {
                 pos: (self.num_rows, col),
+                remaining: count,
                 up: tail,
                 down: head,
                 left,
@@ -122,10 +131,11 @@ impl DancingLinks {
             self.nodes[head].up = index;
             self.nodes[tail].down = index;
 
-            self.nodes_per_column[col] += 1;
+            self.nodes_per_column[col] += count;
         }
 
         self.num_rows += 1;
+        self.covered_rows.push(false);
     }
 
     /// Sets which columns are required to be covered exactly once.
@@ -134,35 +144,51 @@ impl DancingLinks {
         self.primary_columns = columns.to_vec()
     }
 
+    /// Sub 1 from all connected nodes in this column
+    fn sub_column(&mut self, col: usize) {
+        let column_header = self.headers[col];
+
+        for col_node in self.walk_down(column_header).skip(1).collect::<Vec<_>>() {
+            self.nodes[col_node].remaining -= 1;
+            self.nodes_per_column[col] -= 1;
+        }
+    }
+
     fn cover_column(&mut self, col: usize) {
         assert!(!self.covered_columns[col], "Column already covered!");
 
-        // Unlink the column header from it's neighbours
         let column_header = self.headers[col];
-        self.unlink_node(column_header, false);
 
         // Go through all rows that intersect with this column, and unlink them from their
         // neighbouring rows
-        let mut column_node = self.nodes[column_header].down;
-        while column_node != column_header {
+        for column_node in self.walk_down(column_header).skip(1).collect::<Vec<_>>() {
             // println!(
             //     "Unlinking row starting with node: {} {:?}",
             //     column_node, self.nodes[column_node]
             // );
-            // Unlink all nodes along this row from above/below
-            // The intersecting row node is not snipped as it is used during the re-linking process
-            // and it is excluded from search due to the column header being unlinked.
-            let mut row_node = self.nodes[column_node].right;
-            while row_node != column_node {
-                self.unlink_node(row_node, true);
-                self.nodes_per_column[self.nodes[row_node].pos.1] -= 1;
-                row_node = self.nodes[row_node].right;
-            }
 
-            column_node = self.nodes[column_node].down;
+            self.nodes[column_node].remaining -= 1;
+            if self.nodes[column_node].remaining == 0 {
+                // Decrement the number of uses remaining for this row
+                // Unlink all nodes along this row from above/below
+                // The intersecting row node is not snipped as it is used during the re-linking process
+                // and it is excluded from search due to the column header being unlinked.
+
+                for row_node in self.walk_right(column_node).skip(1).collect::<Vec<_>>() {
+                    self.nodes[row_node].remaining -= 1;
+                    if self.nodes[row_node].remaining == 0 {
+                        self.unlink_node(row_node, true);
+                        self.nodes_per_column[self.nodes[row_node].pos.1] -= 1;
+                    }
+                }
+            }
         }
 
-        self.covered_columns[col] = true;
+        // Unlink the column if there's no remaining rows in it
+        if self.nodes[column_header].down == column_header {
+            self.unlink_node(column_header, false);
+            self.covered_columns[col] = true;
+        }
     }
 
     /// Unlink a node along one axis
@@ -185,11 +211,14 @@ impl DancingLinks {
     }
 
     fn uncover_column(&mut self, col: usize) {
-        assert!(self.covered_columns[col], "Column is not covered!");
+        // assert!(self.covered_columns[col], "Column is not covered!");
 
         // Re-link the column header from it's neighbours
         let column_header = self.headers[col];
-        self.relink_node(column_header, false);
+        if self.nodes[column_header].down == column_header {
+            self.relink_node(column_header, false);
+            self.covered_columns[col] = false;
+        }
 
         // Go through all rows that intersect with this column, and re-link them with their
         // neighbouring rows
@@ -200,15 +229,17 @@ impl DancingLinks {
             // and it is excluded from search due to the column header being unlinked.
             let mut row_node = self.nodes[column_node].left;
             while row_node != column_node {
-                self.relink_node(row_node, true);
-                self.nodes_per_column[self.nodes[row_node].pos.1] += 1;
+                if self.nodes[row_node].remaining == 0 {
+                    self.relink_node(row_node, true);
+                    self.nodes_per_column[self.nodes[row_node].pos.1] += 1;
+                }
+                self.nodes[row_node].remaining += 1;
+
                 row_node = self.nodes[row_node].left;
             }
 
             column_node = self.nodes[column_node].up;
         }
-
-        self.covered_columns[col] = false;
     }
 
     /// Re-link a node along one axis
@@ -255,10 +286,10 @@ impl DancingLinks {
         let Some(column_header) = self
             .walk_right(self.head)
             .skip(1)
-            // Only select actions using primary columns
+            // Only select actions using primary columns & only non-covered ones
             .filter(|node| {
                 let col = self.nodes[*node].pos.1;
-                self.primary_columns.contains(&col)
+                self.primary_columns.contains(&col) && !self.covered_columns[col]
             })
             .min_by_key(|node| {
                 let col = self.nodes[*node].pos.1;
@@ -269,35 +300,85 @@ impl DancingLinks {
             return true;
         };
 
-        if self.nodes_per_column[column_header] == 0 {
+        let column = self.nodes[column_header].pos.1;
+        // println!(
+        //     "Selected column: {}, nodes: {}",
+        //     column, self.nodes_per_column[column]
+        // );
+
+        if self.nodes_per_column[column] == 0 {
             // Dead end solution
             return false;
         }
 
-        let column = self.nodes[column_header].pos.1;
-        // println!("Selected column: {}", column);
-
-        // Cover it, and conflicting rows
-        self.cover_column(column);
+        // Sub 1 from the chosen column, since that's the constraint we're solving
+        self.sub_column(column);
+        if self.nodes_per_column[column] == 0 {
+            self.covered_columns[column] = true;
+            self.unlink_node(column_header, false);
+        }
+        // println!("Subbed column: {column}");
+        // println!("{}", self);
 
         // Walk through possible choices which cover this condition
         let choices = self
             .walk_down(self.headers[column])
             .skip(1)
             .collect::<Vec<_>>();
-        // println!("Choices: {:?}", choices);
+        // println!(
+        //     "choices: {:?}",
+        //     choices
+        //         .iter()
+        //         .map(|node| { self.nodes[*node].pos.0 })
+        //         .collect::<Vec<_>>()
+        // );
 
         for row_node in choices {
             // println!("Trying row node {}: {:?}", row_node, self.nodes[row_node]);
+            // println!("Choosing row: {:?}", self.nodes[row_node].pos.0);
+            self.covered_rows[self.nodes[row_node].pos.0] = true;
+            // println!("{:?}", self.nodes_per_column);
 
-            // For each choice, cover all other columns which this choice solves
+            // Remove this choice node
+            self.nodes_per_column[self.nodes[row_node].pos.1] -= self.nodes[row_node].remaining;
+            self.unlink_node(row_node, true);
+
+            // Decrement & unlink the nodes along this row, but on other columns
             for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
-                // println!(
-                //     "Covering column node {}: {:?}",
-                //     col_node, self.nodes[col_node]
-                // );
-                self.cover_column(self.nodes[col_node].pos.1);
+                self.nodes[col_node].remaining -= 1;
+                self.nodes_per_column[self.nodes[col_node].pos.1] -= 1;
+                self.unlink_node(col_node, true);
             }
+            // println!("{}", self);
+
+            // Cover columns which conflict with this choice
+            for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
+                let column2 = self.nodes[col_node].pos.1;
+                self.sub_column(column2);
+                if self.nodes_per_column[column2] == 0 {
+                    self.covered_columns[column2] = true;
+                }
+
+                // Remove rows which conflict with newly covered columns
+                for row_node2 in self
+                    .walk_down(self.headers[column2])
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                {
+                    self.covered_rows[self.nodes[row_node2].pos.0] = true;
+                    for col_node2 in self.walk_right(row_node2).skip(1).collect::<Vec<_>>() {
+                        let column3 = self.nodes[col_node2].pos.1;
+                        // NOTE: Node is not decremented here
+                        self.nodes_per_column[column3] -= self.nodes[col_node2].remaining;
+                        if self.nodes_per_column[column3] == 0 {
+                            self.covered_columns[column3] = true;
+                        }
+
+                        self.unlink_node(col_node2, true);
+                    }
+                }
+            }
+            // println!("{}", self);
 
             // Add it to the partial solution
             let row = self.nodes[row_node].pos.0;
@@ -326,6 +407,17 @@ impl DancingLinks {
     /// Solve the exact cover problem. Consumes the struct as it modifies internal state during the
     /// search
     fn solve(mut self) -> Option<Vec<usize>> {
+        // First need to mark any columns with no options as already covered
+        for col in self
+            .nodes_per_column
+            .iter()
+            .enumerate()
+            .filter_map(|(col, count)| (*count == 0).then_some(col))
+            .collect::<Vec<_>>()
+        {
+            self.cover_column(col);
+        }
+
         let mut solution = vec![];
         self.solve_recursive(&mut solution).then_some(solution)
     }
@@ -338,8 +430,24 @@ impl Display for DancingLinks {
 
         let mut sorted_nodes = sorted_nodes.into_iter().peekable();
 
-        for row in 0..self.num_rows {
-            f.write_str(&format!("{:>5} ", row))?;
+        // Coverage
+        f.write_str(&format!("{:>5} ", ""))?;
+        for covered in &self.covered_columns {
+            if *covered {
+                f.write_char('X')?;
+            } else {
+                f.write_char(' ')?;
+            }
+        }
+        f.write_char('\n')?;
+
+        for (row, covered) in self.covered_rows.iter().enumerate() {
+            f.write_str(&format!("{:>5}", row))?;
+            if *covered {
+                f.write_char('X')?;
+            } else {
+                f.write_char(' ')?;
+            }
 
             let mut col = 0;
             while let Some(node) = sorted_nodes.next_if(|node| node.pos.0 == row) {
@@ -347,7 +455,8 @@ impl Display for DancingLinks {
                     f.write_char('.')?;
                     col += 1;
                 }
-                f.write_char('#')?;
+                f.write_str(&format!("{}", node.remaining))?;
+                // f.write_char('#')?;
                 col += 1;
             }
             while col < self.headers.len() {
@@ -370,6 +479,8 @@ fn main() {
         .collect::<Vec<_>>();
 
     let answer = problems
+        // .skip(1)
+        // .take(1)
         .map(|(h, w, pieces)| {
             // Quick check - if there's enough area to hold all the presents
             let area_needed = pieces
@@ -383,57 +494,55 @@ fn main() {
             }
 
             // In-depth check - Exact cover with Algorithm X / Dancing Links
-            let piece_cols = pieces.iter().sum::<usize>();
-
-            let mut piece_col = 0..piece_cols;
+            let piece_cols = pieces.len();
 
             // Create an incidence matrix - Columns are constraints (required & optional), rows are
             // choices to be made (piece x position)
-            let incidence_matrix = shapes.iter().enumerate().flat_map(|(shape_index, shape)| {
-                let board_choices = shape
-                    .clone()
-                    .enumerate_orientations()
-                    .flat_map(|shape| {
-                        // Shape translations
-                        let offsets = (0..h - shape.height() + 1).flat_map(|offset_i| {
-                            (0..w - shape.width() + 1).map(move |offset_j| (offset_i, offset_j))
-                        });
+            let incidence_matrix = shapes
+                .iter()
+                .enumerate()
+                .filter(|(shape_index, _)| pieces[*shape_index] > 0)
+                .flat_map(|(shape_index, shape)| {
+                    let mut board_choices = shape
+                        .clone()
+                        .enumerate_orientations()
+                        .flat_map(|shape| {
+                            // Shape translations
+                            let offsets = (0..h - shape.height() + 1).flat_map(|offset_i| {
+                                (0..w - shape.width() + 1).map(move |offset_j| (offset_i, offset_j))
+                            });
 
-                        let sparse_shape = shape.sparse_mask().collect::<Vec<_>>();
+                            let sparse_shape = shape.sparse_mask().collect::<Vec<_>>();
 
-                        // Create sparse shape at each position
-                        offsets
-                            .map(|(oi, oj)| {
-                                sparse_shape
-                                    .iter()
-                                    // Apply translation
-                                    .map(|(i, j)| (i + oi, j + oj))
-                                    // Convert to incidence matrix indices
-                                    .map(|(i, j)| piece_cols + i * w + j)
-                                    .collect::<Vec<_>>()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>();
+                            // Create sparse shape at each position
+                            offsets
+                                .map(|(oi, oj)| {
+                                    sparse_shape
+                                        .iter()
+                                        // Apply translation
+                                        .map(|(i, j)| (i + oi, j + oj))
+                                        // Convert to incidence matrix indices
+                                        .map(|(i, j)| (piece_cols + i * w + j, 1))
+                                        .collect::<HashMap<_, _>>()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>();
 
-                // Assign one piece to each set of choices
-                std::iter::repeat_n(board_choices, pieces[shape_index])
-                    .zip(piece_col.by_ref())
-                    .flat_map(|(mut choices, i)| {
-                        choices.iter_mut().for_each(|row| {
-                            row.push(i);
-                        });
+                    // Assign board pieces
+                    board_choices.iter_mut().for_each(|row| {
+                        row.insert(shape_index, pieces[shape_index]);
+                    });
 
-                        choices
-                    })
-                    .collect::<Vec<_>>()
-            });
+                    board_choices
+                });
 
             let mut dl = DancingLinks::new();
             for row in incidence_matrix {
                 dl.add_row(&row);
             }
             dl.set_primary_columns(&(0..piece_cols).collect::<Vec<_>>());
+            // println!("{}", dl);
 
             dl.solve()
         })
@@ -441,6 +550,7 @@ fn main() {
         .inspect(|(i, solution)| {
             println!("Problem {i}: {:?}", solution);
         })
+        .filter(|(_, solution)| solution.is_some())
         .count();
 
     println!("{answer}");
