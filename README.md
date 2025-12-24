@@ -258,6 +258,8 @@ In one case, the results in a matrix of ~1500 x ~1.1m, but is extremely sparse (
 The implementation of the algorithm was fairly straight forward once I understood it, but the big hurdle was understanding how to represent the problems as an abstract exact cover question.  
 Even with this effecient algorithm, in the case where there is no solution I found that the run time became too large. Adding an initial check whether the area of the region was enough to hold all the presents was enough to get it over the line.  
 
+I took some time afterwards to extend my dancing links implementation to work with non-1 valued matrices. This allowed me to go from 1 choice matrix per piece instance to 1 per piece type, massively reducing the memory footprint of the stored nodes. From (1081080x1713 incidence matrix, 8150530 nodes) to (42120x1564 incidence matrix, 321677 nodes)
+
 
 
 

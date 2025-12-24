@@ -144,8 +144,8 @@ impl DancingLinks {
         self.primary_columns = columns.to_vec()
     }
 
-    /// Sub 1 from all connected nodes in this column
-    fn sub_column(&mut self, col: usize) {
+    /// Decrement the remaining counter by 1 along a column
+    fn decr_column(&mut self, col: usize) {
         let column_header = self.headers[col];
 
         for col_node in self.walk_down(column_header).skip(1).collect::<Vec<_>>() {
@@ -154,49 +154,18 @@ impl DancingLinks {
         }
     }
 
-    fn cover_column(&mut self, col: usize) {
-        assert!(!self.covered_columns[col], "Column already covered!");
-
+    /// Increment the remaining counter by 1 along a column
+    fn incr_column(&mut self, col: usize) {
         let column_header = self.headers[col];
 
-        // Go through all rows that intersect with this column, and unlink them from their
-        // neighbouring rows
-        for column_node in self.walk_down(column_header).skip(1).collect::<Vec<_>>() {
-            // println!(
-            //     "Unlinking row starting with node: {} {:?}",
-            //     column_node, self.nodes[column_node]
-            // );
-
-            self.nodes[column_node].remaining -= 1;
-            if self.nodes[column_node].remaining == 0 {
-                // Decrement the number of uses remaining for this row
-                // Unlink all nodes along this row from above/below
-                // The intersecting row node is not snipped as it is used during the re-linking process
-                // and it is excluded from search due to the column header being unlinked.
-
-                for row_node in self.walk_right(column_node).skip(1).collect::<Vec<_>>() {
-                    self.nodes[row_node].remaining -= 1;
-                    if self.nodes[row_node].remaining == 0 {
-                        self.unlink_node(row_node, true);
-                        self.nodes_per_column[self.nodes[row_node].pos.1] -= 1;
-                    }
-                }
-            }
-        }
-
-        // Unlink the column if there's no remaining rows in it
-        if self.nodes[column_header].down == column_header {
-            self.unlink_node(column_header, false);
-            self.covered_columns[col] = true;
+        for col_node in self.walk_down(column_header).skip(1).collect::<Vec<_>>() {
+            self.nodes[col_node].remaining += 1;
+            self.nodes_per_column[col] += 1;
         }
     }
 
     /// Unlink a node along one axis
     fn unlink_node(&mut self, node: NodeIndex, vertical: bool) {
-        // println!(
-        //     "Unlinking node: {} {:?} - {}",
-        //     node, self.nodes[node], vertical
-        // );
         if vertical {
             let up = self.nodes[node].up;
             let down = self.nodes[node].down;
@@ -207,38 +176,6 @@ impl DancingLinks {
             let right = self.nodes[node].right;
             self.nodes[left].right = right;
             self.nodes[right].left = left;
-        }
-    }
-
-    fn uncover_column(&mut self, col: usize) {
-        // assert!(self.covered_columns[col], "Column is not covered!");
-
-        // Re-link the column header from it's neighbours
-        let column_header = self.headers[col];
-        if self.nodes[column_header].down == column_header {
-            self.relink_node(column_header, false);
-            self.covered_columns[col] = false;
-        }
-
-        // Go through all rows that intersect with this column, and re-link them with their
-        // neighbouring rows
-        let mut column_node = self.nodes[column_header].up;
-        while column_node != column_header {
-            // Unlink all nodes along this row from above/below
-            // The intersecting row node is not snipped as it is used during the re-linking process
-            // and it is excluded from search due to the column header being unlinked.
-            let mut row_node = self.nodes[column_node].left;
-            while row_node != column_node {
-                if self.nodes[row_node].remaining == 0 {
-                    self.relink_node(row_node, true);
-                    self.nodes_per_column[self.nodes[row_node].pos.1] += 1;
-                }
-                self.nodes[row_node].remaining += 1;
-
-                row_node = self.nodes[row_node].left;
-            }
-
-            column_node = self.nodes[column_node].up;
         }
     }
 
@@ -257,6 +194,7 @@ impl DancingLinks {
         }
     }
 
+    /// Walk from a node to others connected to the right, non-repeating
     fn walk_right(&self, start: NodeIndex) -> impl Iterator<Item = NodeIndex> {
         successors(Some(start), move |prev| {
             let next = self.nodes[*prev].right;
@@ -265,6 +203,7 @@ impl DancingLinks {
         })
     }
 
+    /// Walk from a node to others connected downwards, non-repeating
     fn walk_down(&self, start: NodeIndex) -> impl Iterator<Item = NodeIndex> {
         successors(Some(start), move |prev| {
             let next = self.nodes[*prev].down;
@@ -273,12 +212,93 @@ impl DancingLinks {
         })
     }
 
-    fn walk_left(&self, start: NodeIndex) -> impl Iterator<Item = NodeIndex> {
-        successors(Some(start), move |prev| {
-            let next = self.nodes[*prev].left;
+    /// Add a row to the solution, updating the matrix and removing conflicting choices
+    fn choose(&mut self, row_node: NodeIndex) {
+        self.covered_rows[self.nodes[row_node].pos.0] = true;
 
-            (start != next).then_some(next)
-        })
+        // Remove this choice node
+        self.nodes_per_column[self.nodes[row_node].pos.1] -= self.nodes[row_node].remaining;
+        self.unlink_node(row_node, true);
+
+        // Decrement & unlink the nodes along this row, but on other columns
+        for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
+            self.nodes[col_node].remaining -= 1;
+            self.nodes_per_column[self.nodes[col_node].pos.1] -= 1;
+            self.unlink_node(col_node, true);
+        }
+
+        // Cover columns which conflict with this choice
+        for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
+            let column2 = self.nodes[col_node].pos.1;
+            self.decr_column(column2);
+            if self.nodes_per_column[column2] == 0 {
+                self.covered_columns[column2] = true;
+            }
+
+            // Remove rows which conflict with newly covered columns
+            for row_node2 in self
+                .walk_down(self.headers[column2])
+                .skip(1)
+                .collect::<Vec<_>>()
+            {
+                self.covered_rows[self.nodes[row_node2].pos.0] = true;
+
+                for col_node2 in self.walk_right(row_node2).skip(1).collect::<Vec<_>>() {
+                    let column3 = self.nodes[col_node2].pos.1;
+                    self.nodes_per_column[column3] -= self.nodes[col_node2].remaining;
+                    if self.nodes_per_column[column3] == 0 {
+                        self.covered_columns[column3] = true;
+                    }
+
+                    self.unlink_node(col_node2, true);
+                }
+            }
+        }
+    }
+
+    // Un-do the coverings applied when adding a row to the solution
+    fn unchoose(&mut self, row_node: NodeIndex) {
+        self.covered_rows[self.nodes[row_node].pos.0] = false;
+
+        // Re-link this choice node
+        self.nodes_per_column[self.nodes[row_node].pos.1] += self.nodes[row_node].remaining;
+        self.relink_node(row_node, true);
+
+        // Increment & re-link the nodes along this row, but on other columns
+        for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
+            self.nodes[col_node].remaining += 1;
+            self.nodes_per_column[self.nodes[col_node].pos.1] += 1;
+            self.relink_node(col_node, true);
+        }
+
+        // Uncover columns which conflict with this choice
+        for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
+            let column2 = self.nodes[col_node].pos.1;
+            if self.nodes_per_column[column2] == 0 {
+                self.covered_columns[column2] = false;
+            }
+            self.incr_column(column2);
+
+            // Re-add rows which conflict with uncovered columns
+            for row_node2 in self
+                .walk_down(self.headers[column2])
+                .skip(1)
+                .collect::<Vec<_>>()
+            {
+                self.covered_rows[self.nodes[row_node2].pos.0] = false;
+
+                for col_node2 in self.walk_right(row_node2).skip(1).collect::<Vec<_>>() {
+                    let column3 = self.nodes[col_node2].pos.1;
+
+                    if self.nodes_per_column[column3] == 0 {
+                        self.covered_columns[column3] = false;
+                    }
+                    self.nodes_per_column[column3] += self.nodes[col_node2].remaining;
+
+                    self.relink_node(col_node2, true);
+                }
+            }
+        }
     }
 
     fn solve_recursive(&mut self, solution: &mut Vec<usize>) -> bool {
@@ -301,10 +321,6 @@ impl DancingLinks {
         };
 
         let column = self.nodes[column_header].pos.1;
-        // println!(
-        //     "Selected column: {}, nodes: {}",
-        //     column, self.nodes_per_column[column]
-        // );
 
         if self.nodes_per_column[column] == 0 {
             // Dead end solution
@@ -312,73 +328,19 @@ impl DancingLinks {
         }
 
         // Sub 1 from the chosen column, since that's the constraint we're solving
-        self.sub_column(column);
+        self.decr_column(column);
         if self.nodes_per_column[column] == 0 {
             self.covered_columns[column] = true;
             self.unlink_node(column_header, false);
         }
-        // println!("Subbed column: {column}");
-        // println!("{}", self);
 
         // Walk through possible choices which cover this condition
-        let choices = self
+        for row_node in self
             .walk_down(self.headers[column])
             .skip(1)
-            .collect::<Vec<_>>();
-        // println!(
-        //     "choices: {:?}",
-        //     choices
-        //         .iter()
-        //         .map(|node| { self.nodes[*node].pos.0 })
-        //         .collect::<Vec<_>>()
-        // );
-
-        for row_node in choices {
-            // println!("Trying row node {}: {:?}", row_node, self.nodes[row_node]);
-            // println!("Choosing row: {:?}", self.nodes[row_node].pos.0);
-            self.covered_rows[self.nodes[row_node].pos.0] = true;
-            // println!("{:?}", self.nodes_per_column);
-
-            // Remove this choice node
-            self.nodes_per_column[self.nodes[row_node].pos.1] -= self.nodes[row_node].remaining;
-            self.unlink_node(row_node, true);
-
-            // Decrement & unlink the nodes along this row, but on other columns
-            for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
-                self.nodes[col_node].remaining -= 1;
-                self.nodes_per_column[self.nodes[col_node].pos.1] -= 1;
-                self.unlink_node(col_node, true);
-            }
-            // println!("{}", self);
-
-            // Cover columns which conflict with this choice
-            for col_node in self.walk_right(row_node).skip(1).collect::<Vec<_>>() {
-                let column2 = self.nodes[col_node].pos.1;
-                self.sub_column(column2);
-                if self.nodes_per_column[column2] == 0 {
-                    self.covered_columns[column2] = true;
-                }
-
-                // Remove rows which conflict with newly covered columns
-                for row_node2 in self
-                    .walk_down(self.headers[column2])
-                    .skip(1)
-                    .collect::<Vec<_>>()
-                {
-                    self.covered_rows[self.nodes[row_node2].pos.0] = true;
-                    for col_node2 in self.walk_right(row_node2).skip(1).collect::<Vec<_>>() {
-                        let column3 = self.nodes[col_node2].pos.1;
-                        // NOTE: Node is not decremented here
-                        self.nodes_per_column[column3] -= self.nodes[col_node2].remaining;
-                        if self.nodes_per_column[column3] == 0 {
-                            self.covered_columns[column3] = true;
-                        }
-
-                        self.unlink_node(col_node2, true);
-                    }
-                }
-            }
-            // println!("{}", self);
+            .collect::<Vec<_>>()
+        {
+            self.choose(row_node);
 
             // Add it to the partial solution
             let row = self.nodes[row_node].pos.0;
@@ -394,12 +356,15 @@ impl DancingLinks {
             // Un-do the coverings
             solution.pop();
 
-            for col_node in self.walk_left(row_node).skip(1).collect::<Vec<_>>() {
-                self.uncover_column(self.nodes[col_node].pos.1);
-            }
+            self.unchoose(row_node);
         }
 
-        self.uncover_column(column);
+        // Sub 1 from the chosen column, since that's the constraint we're solving
+        if self.nodes_per_column[column] == 0 {
+            self.covered_columns[column] = false;
+            self.relink_node(column_header, false);
+        }
+        self.incr_column(column);
 
         false
     }
@@ -415,7 +380,8 @@ impl DancingLinks {
             .filter_map(|(col, count)| (*count == 0).then_some(col))
             .collect::<Vec<_>>()
         {
-            self.cover_column(col);
+            self.covered_columns[col] = true;
+            self.unlink_node(self.headers[col], false);
         }
 
         let mut solution = vec![];
@@ -479,8 +445,6 @@ fn main() {
         .collect::<Vec<_>>();
 
     let answer = problems
-        // .skip(1)
-        // .take(1)
         .map(|(h, w, pieces)| {
             // Quick check - if there's enough area to hold all the presents
             let area_needed = pieces
