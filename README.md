@@ -261,6 +261,24 @@ Even with this effecient algorithm, in the case where there is no solution I fou
 I took some time afterwards to extend my dancing links implementation to work with non-1 valued matrices. This allowed me to go from 1 choice matrix per piece instance to 1 per piece type, massively reducing the memory footprint of the stored nodes. From (1081080x1713 incidence matrix, 8150530 nodes) to (42120x1564 incidence matrix, 321677 nodes)
 
 
+For the AI, its first attempt went for a straight forward DFS approach, using a `HashSet` to track covered tiles. Even with the example data, it timed out.  
+For some reason, it thought that the program was panicking, which it wasn't. It then proposed to add some debug lines to figure out what was going on, but instead just ran the same program again.  
+I restarted from the initial prompt, adding `-v` to timeout so that it was clear when it was killed. It went pretty much down the same path.  
+It switched to using in-place operations for rotating/translating shapes, and narrowing the search space for translations slightly, but it didn't do much.  
+After a couple more tries, it decided to use a different approach: Dancing Links or a simpler backtracking approach. It of course went with the latter, moving from a `HashSet` to a `Vec<bool>` for keeping track of filled squares.  
+This ran, but all problems were deemed unsolvable, so it introduced some debugging lines to figure out why. It successfully figured out that its approach of placing shapes at the first empty position was too restrictive, and instead tried every possible position. This worked for the two examples, but timed out on the 3rd (unsolvable). Unfortunately it re-introduced the first empty position constraint, which brought us back to the wrong answer.  
+It went through some iterations of debugging, and walking through ascii versions of a step-by-step, but the ascii diagrams didn't actually represent the shapes in the problem statement.  
+It seemed to get very confused once it started drawing out shapes. When going through the step-by-step, it kept getting transformations wrong, like this:  
+```
+Shape B rotated by 90 degrees
+###    #.#
+#.. -> #.#
+###    ##.
+```
+and going back with a "hey I actually think my solution is correct, let me run it again to make sure".  
+After some spinning, I had to cut it off due to cost. At this point it had achieved a working solution for the example cases which had a soltution, but which timed out for those without a solution.  
+I started a new thread with the summary as before, being explicit that previous attempts did not work. It initially produced similar code to before resulting in an incorrect answer. Eventually it did actually end up with the right answer which a standard DFS and early rejection based on the region area.  
+Total Cost: €8.30  
 
 
 ---
@@ -274,8 +292,8 @@ Do not explore the codebase before attempting to create your solution.
 Put the solution in [@part1_ai.rs](file:///home/adam/projects/rust/aoc2025/day1/src/bin/part1_ai.rs)   
 The input data files have already been prepared.  
 You can test the program by running:  
-- `cat data/example.txt | timeout 60 cargo run --bin part1_ai` (example input shown above)  
-- `cat data/input.txt | timeout 60 cargo run --bin part1_ai` (real input)  
+- `cat data/example.txt | timeout -v 60 cargo run --bin part1_ai` (example input shown above)  
+- `cat data/input.txt | timeout -v 60 cargo run --bin part1_ai` (real input)  
 ````  
 
 And for part 2 (in the same thread):  
